@@ -54,12 +54,10 @@ void setSocketOptions(Fd fd, Flags<Options> options) {
         TRY(::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof (one)));
     }
 
-    if (options.hasFlag(Options::Linger)) {
-        struct linger opt;
-        opt.l_onoff = 1;
-        opt.l_linger = 1;
-        TRY(::setsockopt(fd, SOL_SOCKET, SO_LINGER, &opt, sizeof (opt)));
-    }
+    struct linger opt;
+    opt.l_onoff = 1;
+    opt.l_linger = 0;
+    TRY(::setsockopt(fd, SOL_SOCKET, SO_LINGER, &opt, sizeof (opt)));
 
     if (options.hasFlag(Options::FastOpen)) {
         int hint = 5;
@@ -147,7 +145,7 @@ Listener::bind(const Address& address) {
 
     struct addrinfo hints;
     hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM; 
+    hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     hints.ai_protocol = 0;
 
