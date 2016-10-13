@@ -220,7 +220,7 @@ RouterHandler::onRequest(
         const Http::Request& req,
         Http::ResponseWriter response)
 {
-    auto resp = response.clone();
+    auto resp = response.clone(router.middleware);
     auto result = router.route(req, std::move(resp));
 
     /* @Feature: add support for a custom NotFound handler */
@@ -298,7 +298,9 @@ Router::route(const Http::Request& req, Http::ResponseWriter response) {
         std::vector<TypedParam> splats;
         std::tie(match, params, splats) = route.match(req);
         if (match) {
-            route.invokeHandler(Request(req, std::move(params), std::move(splats)), std::move(response));
+            Request request(req, std::move(params), std::move(splats));
+            runMiddleware(request);
+            route.invokeHandler(std::move(request), std::move(response));
             return Router::Status::Match;
         }
     }
@@ -319,6 +321,21 @@ Router::addRoute(Http::Method method, std::string resource, Route::Handler handl
     r.push_back(Route(std::move(resource), method, std::move(handler)));
 }
 
+void
+Router::runMiddleware(const Rest::Request& request) {
+    runMiddleware(request,0);
+}
+
+void
+Router::runMiddleware(const Rest::Request& request, int index) {
+    if(middleware.get() == nullptr) return;
+    auto it = middleware->begin() + index;
+    if(it != middleware->end()) {
+        (*it)->handleBefore(request, [this,&request,index]() {
+            this->runMiddleware(request,index+1);
+        });
+    }
+}
 
 namespace Routes {
 

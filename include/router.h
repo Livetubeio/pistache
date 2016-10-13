@@ -137,6 +137,7 @@ namespace Private {
 
 class Router {
 public:
+    friend class Private::RouterHandler;
 
     enum class Status { Match, NotFound };
 
@@ -153,6 +154,12 @@ public:
     void del(std::string resource, Route::Handler handler);
     void options(std::string resource, Route::Handler handler);
 
+    template<typename T>
+    void registerMiddleware() {
+        static_assert(std::is_base_of<Net::Http::Middleware,T>::value, "Not a middleware");
+        middleware->push_back(std::make_unique<T>());
+    }
+
     void addCustomHandler(Route::Handler handler);
 
     Status route(const Http::Request& request, Http::ResponseWriter response);
@@ -162,6 +169,10 @@ private:
     std::unordered_map<Http::Method, std::vector<Route>> routes;
 
     std::vector<Route::Handler> customHandlers;
+    void runMiddleware(const Rest::Request&);
+    void runMiddleware(const Rest::Request&, int);
+    typedef std::vector<std::unique_ptr<Http::Middleware>> middlewareVector;
+    std::shared_ptr<middlewareVector> middleware = std::make_shared<middlewareVector>();
 };
 
 namespace Private {

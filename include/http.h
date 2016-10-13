@@ -24,6 +24,10 @@
 
 namespace Net {
 
+namespace Rest {
+    class Request;
+}
+
 namespace Http {
 
 namespace details {
@@ -403,6 +407,30 @@ public:
 
 };
 
+class Middleware {
+public:
+
+    /**
+     * Before Middleware
+     *
+     * @tparam T
+     * @return
+     */
+    virtual void handleBefore(const Rest::Request& request, std::function<void()> next) {
+        next();
+    }
+
+    /**
+     * After Middleware
+     *
+     * @tparam T
+     * @return
+     */
+    virtual void handleAfter(ResponseWriter& r, std::function<void()> next) {
+        next();
+    }
+};
+
 class ResponseWriter : public Response {
 public:
     static constexpr size_t DefaultStreamSize = 512;
@@ -423,7 +451,9 @@ public:
     // have to define it ourself
     ResponseWriter(ResponseWriter&& other)
         : Response(std::move(other))
+        , middleware(other.middleware)
         , peer_(other.peer_)
+        , currentMiddleware(other.currentMiddleware)
         , buf_(std::move(other.buf_))
         , transport_(other.transport_)
         , timeout_(std::move(other.timeout_))
@@ -434,6 +464,8 @@ public:
         transport_ = other.transport_;
         buf_ = std::move(other.buf_);
         timeout_ = std::move(other.timeout_);
+        middleware = std::move(other.middleware);
+        currentMiddleware = other.currentMiddleware;
         return *this;
     }
 
@@ -452,6 +484,7 @@ public:
      */
 
     Async::Promise<ssize_t> send(Code code) {
+        runMiddleware();
         code_ = code;
         return putOnWire(nullptr, 0);
     }
@@ -460,6 +493,7 @@ public:
             const std::string& body,
             const Mime::MediaType &mime = Mime::MediaType())
     {
+        runMiddleware();
         code_ = code;
 
         if (mime.isValid()) {
@@ -479,6 +513,7 @@ public:
             const char (&arr)[N],
             const Mime::MediaType& mime = Mime::MediaType())
     {
+        runMiddleware();
         /* @Refactor: code duplication */
         code_ = code;
 
@@ -524,6 +559,13 @@ public:
         return ResponseWriter(*this);
     }
 
+    typedef std::shared_ptr<std::vector<std::unique_ptr<Middleware>>> MiddlewareArray;
+    ResponseWriter clone(MiddlewareArray middleware) const {
+        auto r = ResponseWriter(*this);
+        r.middleware = middleware;
+        return r;
+    }
+
 private:
     ResponseWriter(Tcp::Transport* transport, Request request, Handler* handler)
         : Response(request.version())
@@ -558,10 +600,23 @@ private:
 
     Async::Promise<ssize_t> putOnWire(const char* data, size_t len);
 
+    void runMiddleware() {
+        if(middleware.get() == nullptr) return;
+        auto it = middleware->begin() +  currentMiddleware;
+        if(it != middleware->end()) {
+            (*it)->handleAfter(*this, [&]() {
+                currentMiddleware++;
+                runMiddleware();
+            });
+        }
+    }
+
     std::weak_ptr<Tcp::Peer> peer_;
     DynamicStreamBuf buf_;
     Tcp::Transport *transport_;
     Timeout timeout_;
+    MiddlewareArray middleware;
+    int currentMiddleware = 0;
 };
 
 Async::Promise<ssize_t> serveFile(
