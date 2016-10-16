@@ -18,13 +18,7 @@ namespace Http {
 namespace Header {
 
 namespace {
-    std::unordered_map<std::string, Registry::RegistryFunc> registry;
-
-    bool incasesensitiveCompare(std::string part1, std::string part2) {
-        std::transform(part1.begin(),part1.end(),part1.begin(),toupper);
-        std::transform(part2.begin(),part2.end(),part2.begin(),toupper);
-        return part1 == part2;
-    }
+    std::unordered_map<LowerString, Registry::RegistryFunc> registry;
 }
 
 RegisterHeader(Accept);
@@ -45,12 +39,12 @@ RegisterHeader(UserAgent);
 void
 Registry::registerHeader(std::string name, Registry::RegistryFunc func)
 {
-    auto it = registry.find(name);
+    auto it = registry.find(LowerString(name));
     if (it != std::end(registry)) {
         throw std::runtime_error("Header already registered");
     }
 
-    registry.insert(std::make_pair(name, std::move(func)));
+    registry.insert(std::make_pair(LowerString(name), std::move(func)));
 }
 
 std::vector<std::string>
@@ -59,7 +53,7 @@ Registry::headersList() {
     names.reserve(registry.size());
 
     for (const auto &header: registry) {
-        names.push_back(header.first);
+        names.push_back(header.first.getString());
     }
 
     return names;
@@ -67,9 +61,7 @@ Registry::headersList() {
 
 std::unique_ptr<Header>
 Registry::makeHeader(const std::string& name) {
-    auto it = std::find_if(registry.begin(),registry.end(),[&](const std::pair<std::string,Registry::RegistryFunc>& header) {
-        return incasesensitiveCompare(name,header.first);
-    });
+    auto it = registry.find(LowerString(name));
     if (it == std::end(registry)) {
         throw std::runtime_error("Unknown header");
     }
@@ -79,22 +71,20 @@ Registry::makeHeader(const std::string& name) {
 
 bool
 Registry::isRegistered(const std::string& name) {
-    auto it = std::find_if(registry.begin(),registry.end(),[&](const std::pair<std::string,Registry::RegistryFunc>& header) {
-        return incasesensitiveCompare(name,header.first);
-    });
+    auto it = registry.find(LowerString(name));
     return it != std::end(registry);
 }
 
 Collection&
 Collection::add(const std::shared_ptr<Header>& header) {
-    headers.insert(std::make_pair(header->name(), header));
+    headers.insert(std::make_pair(LowerString(header->name()), header));
     
     return *this;
 }
 
 Collection&
 Collection::addRaw(const Raw& raw) {
-    rawHeaders.insert(std::make_pair(raw.name(), raw));
+    rawHeaders.insert(std::make_pair(LowerString(raw.name()), raw));
     return *this;
 }
 
@@ -120,7 +110,7 @@ Collection::get(const std::string& name) {
 
 Raw
 Collection::getRaw(const std::string& name) const {
-    auto it = rawHeaders.find(name);
+    auto it = rawHeaders.find(LowerString(name));
     if (it == std::end(rawHeaders)) {
         throw std::runtime_error("Could not find header");
     }
@@ -146,7 +136,7 @@ Collection::tryGet(const std::string& name) {
 
 Optional<Raw>
 Collection::tryGetRaw(const std::string& name) const {
-    auto it = rawHeaders.find(name);
+    auto it = rawHeaders.find(LowerString(name));
     if (it == std::end(rawHeaders)) {
         return None();
     }
@@ -172,9 +162,9 @@ Collection::list() const {
 
 bool
 Collection::remove(const std::string& name) {
-    auto tit = headers.find(name);
+    auto tit = headers.find(LowerString(name));
     if (tit == std::end(headers)) {
-        auto rit = rawHeaders.find(name);
+        auto rit = rawHeaders.find(LowerString(name));
         if (rit == std::end(rawHeaders)) return false;
 
         rawHeaders.erase(rit);
@@ -192,9 +182,7 @@ Collection::clear() {
 
 std::pair<bool, std::shared_ptr<Header>>
 Collection::getImpl(const std::string& name) const {
-    auto it = std::find_if(headers.begin(),headers.end(),[&](const std::pair<std::string,std::shared_ptr<Header>>& header) {
-        return incasesensitiveCompare(name,header.first);
-    });
+    auto it = headers.find(LowerString(name));
     if (it == std::end(headers)) {
         return std::make_pair(false, nullptr);
     }

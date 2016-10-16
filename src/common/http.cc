@@ -69,7 +69,7 @@ namespace {
         std::ostream os(&buf);
 
         for (const auto& header: headers.list()) {
-            OUT(os << header->name() << ": ");
+            OUT(os << Net::Http::Header::LowerString(header->name()).getString() << ": ");
             OUT(header->write(os));
             OUT(os << crlf);
         }

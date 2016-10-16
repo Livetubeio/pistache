@@ -9,7 +9,58 @@
 #include <unordered_map>
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include "http_header.h"
+
+namespace Net {
+
+    namespace Http {
+
+        namespace Header {
+
+            class LowerString {
+            public:
+                LowerString(const std::string& string) : lower(string) {
+                    std::transform(lower.begin(),lower.end(),lower.begin(),tolower);
+                }
+
+                friend bool operator==(const LowerString& first, const LowerString& other) {
+                    return other.lower == first.lower;
+                }
+
+                friend bool operator<(const LowerString& first, const LowerString& other) {
+                    return first.lower < other.lower;
+                }
+
+                std::string getString() const {
+                    return lower;
+                }
+            private:
+                std::string lower;
+            };
+
+        }
+
+    }
+
+}
+
+namespace std {
+
+    template <>
+    struct hash<Net::Http::Header::LowerString>
+    {
+        std::size_t operator()(const Net::Http::Header::LowerString& k) const
+        {
+            using std::size_t;
+            using std::hash;
+            using std::string;
+
+            return (hash<string>()(k.getString()));
+        }
+    };
+
+}
 
 namespace Net {
 
@@ -95,8 +146,8 @@ public:
 private:
     std::pair<bool, std::shared_ptr<Header>> getImpl(const std::string& name) const;
 
-    std::unordered_map<std::string, std::shared_ptr<Header>> headers;
-    std::unordered_map<std::string, Raw> rawHeaders;
+    std::unordered_map<LowerString, std::shared_ptr<Header>> headers;
+    std::unordered_map<LowerString, Raw> rawHeaders;
 };
 
 struct Registry {
